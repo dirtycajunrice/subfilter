@@ -2,6 +2,7 @@ package subfilter
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"net/http"
@@ -59,6 +60,18 @@ func TestServeHTTP(t *testing.T) {
 			expResBody:      "foo is the new bar",
 		},
 		{
+			desc: "should unzip, replace foo by bar, then zip",
+			filters: []Filter{
+				{
+					Regex:       "foo",
+					Replacement: "bar",
+				},
+			},
+			contentEncoding: "gzip",
+			resBody:         "foo is the new bar",
+			expResBody:      "bar is the new bar",
+		},
+		{
 			desc: "should replace foo by bar if content encoding is identity",
 			filters: []Filter{
 				{
@@ -88,18 +101,26 @@ func TestServeHTTP(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			config := &Config{
-				LastModified: test.lastModified,
-				Filters:      test.filters,
-			}
+			config := CreateConfig()
+			config.LastModified = test.lastModified
+			config.Filters = test.filters
 
-			next := func(rw http.ResponseWriter, req *http.Request) {
-				rw.Header().Set("Content-Encoding", test.contentEncoding)
-				rw.Header().Set("Last-Modified", "Thu, 02 Jun 2016 06:01:08 GMT")
-				rw.Header().Set("Content-Length", strconv.Itoa(len(test.resBody)))
-				rw.WriteHeader(http.StatusOK)
-
-				_, _ = fmt.Fprintf(rw, test.resBody)
+			next := func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Encoding", test.contentEncoding)
+				w.Header().Set("Last-Modified", "Thu, 02 Jun 2016 06:01:08 GMT")
+				w.Header().Set("Content-Length", strconv.Itoa(len(test.resBody)))
+				w.WriteHeader(http.StatusOK)
+				if test.contentEncoding == "gzip" {
+					gw := gzip.NewWriter(w)
+					if _, err := gw.Write([]byte(test.resBody)); err != nil {
+						t.Fatal(err)
+					}
+					if err := gw.Close(); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					_, _ = fmt.Fprintf(w, test.resBody)
+				}
 			}
 
 			rewriteBody, err := New(context.Background(), http.HandlerFunc(next), config, "subfilter")

@@ -141,7 +141,14 @@ func (r *responseWriter) Write(p []byte) (int, error) {
 	switch r.encoding {
 	case "gzip":
 		gw := gzip.NewWriter(&r.buffer)
-		return gw.Write(p)
+		i, err := gw.Write(p)
+		if err != nil {
+			return i, err
+		}
+		if err = gw.Close(); err != nil {
+			return i, err
+		}
+		return i, err
 	default:
 		return r.buffer.Write(p)
 	}
