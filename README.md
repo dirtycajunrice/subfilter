@@ -15,7 +15,7 @@ repository
 
 [experimental.plugins.subfilter]
   modulename = "github.com/DirtyCajunRice/subfilter"
-  version = "v0.4.3"
+  version = "v0.4.4"
 ```
 
 ### Dynamic
@@ -58,7 +58,7 @@ extraArgs
 ```yaml
 ...
 - "--experimental.plugins.subfilter.modulename=github.com/DirtyCajunRice/subfilter"
-- "--experimental.plugins.subfilter.version=v0.4.3"
+- "--experimental.plugins.subfilter.version=v0.4.4"
 ...
 ```
 
