@@ -16,6 +16,8 @@ import (
 	"regexp"
 )
 
+const ContentEncodingGzip = "gzip"
+
 // Filter holds one Filter definition.
 type Filter struct {
 	Regex       string `json:"regex,omitempty"`
@@ -89,10 +91,11 @@ func (s *subfilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ce := rw.Header().Get("Content-Encoding")
 
 	var b []byte
+
 	switch ce {
 	case "", "identity":
 		b = rw.buffer.Bytes()
-	case "gzip":
+	case ContentEncodingGzip:
 		gr, err := gzip.NewReader(&rw.buffer)
 		if err != nil {
 			log.Printf("unable to create gzip reader: %v", err)
@@ -114,7 +117,7 @@ func (s *subfilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		rw.encoding = "gzip"
+		rw.encoding = ContentEncodingGzip
 	default:
 		if _, err := io.Copy(w, &rw.buffer); err != nil {
 			log.Printf("unable to write response: %v", err)
@@ -156,18 +159,20 @@ func (r *responseWriter) Write(p []byte) (int, error) {
 	}
 
 	switch r.encoding {
-	case "gzip":
+	case ContentEncodingGzip:
 		gw := gzip.NewWriter(&r.buffer)
+
 		i, err := gw.Write(p)
 		if err != nil {
 			return i, fmt.Errorf("could not gzip response: %w", err)
 		}
+
 		err = gw.Close()
 		if err != nil {
 			return i, fmt.Errorf("could not close gzip writer: %w", err)
 		}
 
-		return i, err
+		return i, nil
 	default:
 		return r.buffer.Write(p)
 	}
