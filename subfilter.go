@@ -1,4 +1,4 @@
-// Package plugin_rewritebody a plugin to rewrite response body.
+// Package subfilter a plugin to rewrite response body.
 package subfilter
 
 import (
