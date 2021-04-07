@@ -16,7 +16,7 @@ import (
 	"regexp"
 )
 
-// Filter holds one Filter definition
+// Filter holds one Filter definition.
 type Filter struct {
 	Regex       string `json:"regex,omitempty"`
 	Replacement string `json:"replacement,omitempty"`
@@ -53,24 +53,29 @@ func New(_ context.Context, next http.Handler, config *Config, name string) (htt
 		regex, err := regexp.Compile(f.Regex)
 		if err != nil {
 			log.Printf("error compiling regex %q: %v", f.Regex, err)
+
 			continue
 		}
+
 		newFilter := filter{
 			regex:       regex,
 			replacement: []byte(f.Replacement),
 		}
+
 		filters = append(filters, newFilter)
 	}
 
 	if len(filters) == 0 {
 		return nil, errors.New("no valid filters. disabling")
 	}
+
 	sf := &subfilter{
 		name:         name,
 		next:         next,
 		filters:      filters,
 		lastModified: config.LastModified,
 	}
+
 	return sf, nil
 }
 
@@ -91,15 +96,22 @@ func (s *subfilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		gr, err := gzip.NewReader(&rw.buffer)
 		if err != nil {
 			log.Printf("unable to create gzip reader: %v", err)
+
 			return
 		}
-		defer gr.Close()
 
 		b, err = ioutil.ReadAll(gr)
 		if err != nil {
 			log.Printf("unable to read gzipped response: %v", err)
+
 			return
 		}
+		if err = gr.Close(); err != nil {
+			log.Printf("unable to close gzip reader: %v", err)
+
+			return
+		}
+
 		rw.encoding = "gzip"
 	default:
 		if _, err := io.Copy(w, &rw.buffer); err != nil {
@@ -129,6 +141,7 @@ func (r *responseWriter) WriteHeader(statusCode int) {
 	if !r.lastModified {
 		r.ResponseWriter.Header().Del("Last-Modified")
 	}
+
 	r.wroteHeader = true
 	r.ResponseWriter.Header().Del("Content-Length")
 	r.ResponseWriter.WriteHeader(statusCode)
@@ -143,10 +156,11 @@ func (r *responseWriter) Write(p []byte) (int, error) {
 		gw := gzip.NewWriter(&r.buffer)
 		i, err := gw.Write(p)
 		if err != nil {
-			return i, err
+			return i, fmt.Errorf("could not gzip response: %w", err)
 		}
-		if err = gw.Close(); err != nil {
-			return i, err
+		err = gw.Close()
+		if err != nil {
+			return i, fmt.Errorf("could not close gzip writer: %w", err)
 		}
 		return i, err
 	default:
