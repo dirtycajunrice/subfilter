@@ -106,7 +106,9 @@ func (s *subfilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			return
 		}
-		if err = gr.Close(); err != nil {
+
+		err = gr.Close()
+		if err != nil {
 			log.Printf("unable to close gzip reader: %v", err)
 
 			return
@@ -117,6 +119,7 @@ func (s *subfilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if _, err := io.Copy(w, &rw.buffer); err != nil {
 			log.Printf("unable to write response: %v", err)
 		}
+
 		return
 	}
 
@@ -151,6 +154,7 @@ func (r *responseWriter) Write(p []byte) (int, error) {
 	if !r.wroteHeader {
 		r.WriteHeader(http.StatusOK)
 	}
+
 	switch r.encoding {
 	case "gzip":
 		gw := gzip.NewWriter(&r.buffer)
@@ -162,6 +166,7 @@ func (r *responseWriter) Write(p []byte) (int, error) {
 		if err != nil {
 			return i, fmt.Errorf("could not close gzip writer: %w", err)
 		}
+
 		return i, err
 	default:
 		return r.buffer.Write(p)
