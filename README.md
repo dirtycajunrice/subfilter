@@ -15,7 +15,7 @@ upstream repository
 
 [experimental.plugins.subfilter]
   modulename = "github.com/DirtyCajunRice/traefik-subfilter-plugin"
-  version = "v0.0.1"
+  version = "v0.4.0"
 ```
 
 ### Dynamic
@@ -58,7 +58,7 @@ extraArgs
 ```yaml
 ...
 - "--experimental.plugins.subfilter.modulename=github.com/DirtyCajunRice/traefik-subfilter-plugin"
-- "--experimental.plugins.subfilter.version=v0.0.1"
+- "--experimental.plugins.subfilter.version=v0.4.0"
 ...
 ```
 

@@ -1,7 +1,7 @@
 displayName: Subfilter
 summary: Rewrites the HTTP response based on predefined regex rules
 type: middleware
-import: github.com/dirtycajunrice/traefik-subfilter-plugin
+import: github.com/DirtyCajunRice/traefik-subfilter-plugin
 compatibility: TODO
 testData:
   lastModified: true
