@@ -4,24 +4,28 @@ package subfilter
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"regexp"
 )
 
-// Rewrite holds one rewrite body configuration.
-type Rewrite struct {
+// Filter holds one Filter definition
+type Filter struct {
 	Regex       string `json:"regex,omitempty"`
 	Replacement string `json:"replacement,omitempty"`
 }
 
 // Config holds the plugin configuration.
 type Config struct {
-	LastModified bool      `json:"lastModified,omitempty"`
-	Rewrites     []Rewrite `json:"rewrites,omitempty"`
+	LastModified bool     `json:"lastModified,omitempty"`
+	Filters      []Filter `json:"filters,omitempty"`
 }
 
 // CreateConfig creates and initializes the plugin configuration.
@@ -29,68 +33,87 @@ func CreateConfig() *Config {
 	return &Config{}
 }
 
-type rewrite struct {
+type filter struct {
 	regex       *regexp.Regexp
 	replacement []byte
 }
 
-type rewriteBody struct {
+type subfilter struct {
 	name         string
 	next         http.Handler
-	rewrites     []rewrite
+	filters      []filter
 	lastModified bool
 }
 
 // New creates and returns a new rewrite body plugin instance.
 func New(_ context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
-	rewrites := make([]rewrite, len(config.Rewrites))
+	filters := make([]filter, 0)
 
-	for i, rewriteConfig := range config.Rewrites {
-		regex, err := regexp.Compile(rewriteConfig.Regex)
+	for _, f := range config.Filters {
+		regex, err := regexp.Compile(f.Regex)
 		if err != nil {
-			return nil, fmt.Errorf("error compiling regex %q: %w", rewriteConfig.Regex, err)
+			log.Printf("error compiling regex %q: %v", f.Regex, err)
+			continue
 		}
-
-		rewrites[i] = rewrite{
+		newFilter := filter{
 			regex:       regex,
-			replacement: []byte(rewriteConfig.Replacement),
+			replacement: []byte(f.Replacement),
 		}
+		filters = append(filters, newFilter)
 	}
 
-	return &rewriteBody{
+	if len(filters) == 0 {
+		return nil, errors.New("no valid filters. disabling")
+	}
+	sf := &subfilter{
 		name:         name,
 		next:         next,
-		rewrites:     rewrites,
+		filters:      filters,
 		lastModified: config.LastModified,
-	}, nil
+	}
+	return sf, nil
 }
 
-func (r *rewriteBody) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	wrappedWriter := &responseWriter{
-		lastModified:   r.lastModified,
-		ResponseWriter: rw,
+func (s *subfilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	rw := &responseWriter{
+		lastModified:   s.lastModified,
+		ResponseWriter: w,
 	}
 
-	r.next.ServeHTTP(wrappedWriter, req)
+	s.next.ServeHTTP(rw, r)
+	ce := rw.Header().Get("Content-Encoding")
 
-	bodyBytes := wrappedWriter.buffer.Bytes()
-
-	contentEncoding := wrappedWriter.Header().Get("Content-Encoding")
-
-	if contentEncoding != "" && contentEncoding != "identity" {
-		if _, err := rw.Write(bodyBytes); err != nil {
-			log.Printf("unable to write body: %v", err)
+	var b []byte
+	switch ce {
+	case "", "identity":
+		b = rw.buffer.Bytes()
+	case "gzip":
+		gr, err := gzip.NewReader(&rw.buffer)
+		if err != nil {
+			log.Printf("unable to create gzip reader: %v", err)
+			return
 		}
+		defer gr.Close()
 
+		b, err = ioutil.ReadAll(gr)
+		if err != nil {
+			log.Printf("unable to read gzipped response: %v", err)
+			return
+		}
+		rw.encoding = "gzip"
+	default:
+		if _, err := io.Copy(rw, &rw.buffer); err != nil {
+			log.Printf("unable to write response: %v", err)
+		}
 		return
 	}
 
-	for _, rwt := range r.rewrites {
-		bodyBytes = rwt.regex.ReplaceAll(bodyBytes, rwt.replacement)
+	for _, f := range s.filters {
+		b = f.regex.ReplaceAll(b, f.replacement)
 	}
 
-	if _, err := rw.Write(bodyBytes); err != nil {
-		log.Printf("unable to write rewrited body: %v", err)
+	if _, err := rw.Write(b); err != nil {
+		log.Printf("unable to write modified response: %v", err)
 	}
 }
 
@@ -98,7 +121,7 @@ type responseWriter struct {
 	buffer       bytes.Buffer
 	lastModified bool
 	wroteHeader  bool
-
+	encoding     string
 	http.ResponseWriter
 }
 
@@ -106,12 +129,8 @@ func (r *responseWriter) WriteHeader(statusCode int) {
 	if !r.lastModified {
 		r.ResponseWriter.Header().Del("Last-Modified")
 	}
-
 	r.wroteHeader = true
-
-	// Delegates the Content-Length Header creation to the final body write.
 	r.ResponseWriter.Header().Del("Content-Length")
-
 	r.ResponseWriter.WriteHeader(statusCode)
 }
 
@@ -119,21 +138,26 @@ func (r *responseWriter) Write(p []byte) (int, error) {
 	if !r.wroteHeader {
 		r.WriteHeader(http.StatusOK)
 	}
-
-	return r.buffer.Write(p)
+	switch r.encoding {
+	case "gzip":
+		gw := gzip.NewWriter(&r.buffer)
+		return gw.Write(p)
+	default:
+		return r.buffer.Write(p)
+	}
 }
 
 func (r *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	hijacker, ok := r.ResponseWriter.(http.Hijacker)
+	h, ok := r.ResponseWriter.(http.Hijacker)
 	if !ok {
 		return nil, nil, fmt.Errorf("%T is not a http.Hijacker", r.ResponseWriter)
 	}
 
-	return hijacker.Hijack()
+	return h.Hijack()
 }
 
 func (r *responseWriter) Flush() {
-	if flusher, ok := r.ResponseWriter.(http.Flusher); ok {
-		flusher.Flush()
+	if f, ok := r.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
 	}
 }
