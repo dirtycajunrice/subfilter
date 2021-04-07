@@ -1,9 +1,9 @@
 # Subfilter
 
-Subfilter is a middleware plugin for [Traefik][traefik] which rewrites the HTTP response body
-by replacing a search regex by a replacement string. Subfilter was directly cloned from
-[plugin-rewritebody][rewritebody] and modified (keeping all git history) to address issues not resolved in the 
-upstream repository
+`subfilter` is a middleware plugin for [Traefik][traefik] which rewrites the HTTP response body by replacing a search
+regex by a replacement string. Subfilter was directly cloned from
+[plugin-rewritebody][rewritebody] and modified (keeping all git history) to address issues not resolved in the upstream
+repository
 
 ## Configuration
 
@@ -14,14 +14,14 @@ upstream repository
   token = "xxxx"
 
 [experimental.plugins.subfilter]
-  modulename = "github.com/DirtyCajunRice/traefik-subfilter-plugin"
-  version = "v0.4.0"
+  modulename = "github.com/DirtyCajunRice/subfilter"
+  version = "v0.4.2"
 ```
 
 ### Dynamic
 
-To configure the `Subfilter` plugin, create a middleware in your configuration as explained [here][middleware-docs].
-The following examples create and use `subfilter` to replace all foo occurrences by bar in the HTTP response body.
+To configure the `subfilter` plugin, create a middleware in your configuration as explained [here][middleware-docs]. The
+following examples create and use `subfilter` to replace all foo occurrences by bar in the HTTP response body.
 
 If you want to apply some limits on the response body, you can chain this middleware plugin with
 the [Buffering middleware][buffering-middleware] from Traefik.
@@ -58,7 +58,7 @@ extraArgs
 ```yaml
 ...
 - "--experimental.plugins.subfilter.modulename=github.com/DirtyCajunRice/traefik-subfilter-plugin"
-- "--experimental.plugins.subfilter.version=v0.4.0"
+- "--experimental.plugins.subfilter.version=v0.4.2"
 ...
 ```
 
@@ -80,7 +80,7 @@ spec:
 
 ### My Regex Fails!
 
-Subfilter uses golang's [regexp][regexp] package. You can use [The Go Playground][playground] to test your regex.
+`subfilter` uses golang's [regexp][regexp] package. You can use [The Go Playground][playground] to test your regex.
 
 Here is a minimally viable example:
 
