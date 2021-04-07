@@ -5,6 +5,6 @@ import: github.com/dirtycajunrice/traefik-subfilter-plugin
 compatibility: TODO
 testData:
   lastModified: true
-  rewrites:
+  filters:
     - regex: "bar"
       replacement: "foo"

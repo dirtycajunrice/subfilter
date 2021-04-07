@@ -40,7 +40,7 @@ the [Buffering middleware][buffering-middleware] from Traefik.
     lastModified = true
 
     # Rewrites all "foo" occurences by "bar"
-    [[http.middlewares.subfilter-foo.plugin.subfilter.rewrites]]
+    [[http.middlewares.subfilter-foo.plugin.subfilter.filters]]
       regex = "foo"
       replacement = "bar"
 
@@ -51,7 +51,63 @@ the [Buffering middleware][buffering-middleware] from Traefik.
         url = "http://127.0.0.1"
 ```
 
+### Dynamic - Kubernetes
+
+extraArgs
+
+```yaml
+...
+- "--experimental.plugins.subfilter.modulename=github.com/DirtyCajunRice/traefik-subfilter-plugin"
+- "--experimental.plugins.subfilter.version=v0.0.1"
+...
+```
+
+Middleware CRD
+
+```yaml
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: subfilter-foo
+spec:
+  plugin:
+    subfilter:
+      lastModified: true
+      filters:
+        - regex: foo
+          replacement: bar
+```
+
+### My Regex Fails!
+
+Subfilter uses golang's [regexp][regexp] package. You can use [The Go Playground][playground] to test your regex.
+
+Here is a minimally viable example:
+
+```go
+package main
+
+import (
+	"fmt"
+	"regexp"
+)
+
+func main() {
+	r := regexp.MustCompile(`((href|src)=")/`)
+	body := []byte("<html><head><link rel=\"stylesheet\" href=\"/style.css\"></head></html>")
+	replace :=[]byte("${1}/subdomain/")
+	fmt.Printf("%s\n", r.ReplaceAll(body, replace))
+}
+```
+
 [traefik]: https://github.com/traefik/traefik
+
 [middleware-docs]: https://docs.traefik.io/middlewares/overview/
+
 [buffering-middleware]: https://docs.traefik.io/middlewares/buffering/
+
 [rewritebody]: https://github.com/traefik/plugin-rewritebody
+
+[regexp]: https://golang.org/pkg/regexp/
+
+[playground]: https://play.golang.org/
