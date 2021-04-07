@@ -158,24 +158,7 @@ func (r *responseWriter) Write(p []byte) (int, error) {
 		r.WriteHeader(http.StatusOK)
 	}
 
-	switch r.encoding {
-	case contentEncodingGzip:
-		gw := gzip.NewWriter(&r.buffer)
-
-		i, err := gw.Write(p)
-		if err != nil {
-			return i, fmt.Errorf("could not gzip response: %w", err)
-		}
-
-		err = gw.Close()
-		if err != nil {
-			return i, fmt.Errorf("could not close gzip writer: %w", err)
-		}
-
-		return i, nil
-	default:
-		return r.buffer.Write(p)
-	}
+	return r.buffer.Write(p)
 }
 
 func (r *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
