@@ -1,4 +1,4 @@
-package plugin_rewritebody
+package subfilter
 
 import (
 	"bytes"

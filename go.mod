@@ -1,3 +1,3 @@
-module github.com/traefik/plugin-rewritebody
+module github.com/DirtyCajunRice/traefik-subfilter-plugin
 
-go 1.15
+go 1.16

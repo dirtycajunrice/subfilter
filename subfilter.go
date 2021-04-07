@@ -1,5 +1,5 @@
 // Package plugin_rewritebody a plugin to rewrite response body.
-package plugin_rewritebody
+package subfilter
 
 import (
 	"bufio"

@@ -1,7 +1,7 @@
-displayName: Rewrite Body
-summary: Rewrites the HTTP response body by replacing a search regex by a replacement string.
+displayName: Subfilter
+summary: Rewrites the HTTP response based on predefined regex rules
 type: middleware
-import: github.com/traefik/plugin-rewritebody
+import: github.com/dirtycajunrice/traefik-subfilter-plugin
 compatibility: TODO
 testData:
   lastModified: true
