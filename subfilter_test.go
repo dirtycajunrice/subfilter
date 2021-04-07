@@ -5,12 +5,14 @@ import (
 	"compress/gzip"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
 )
 
+// nolint
 func TestServeHTTP(t *testing.T) {
 	tests := []struct {
 		desc            string
@@ -111,13 +113,21 @@ func TestServeHTTP(t *testing.T) {
 				w.Header().Set("Content-Length", strconv.Itoa(len(test.resBody)))
 				w.WriteHeader(http.StatusOK)
 				if test.contentEncoding == "gzip" {
-					gw := gzip.NewWriter(w)
+					t.Logf("Original body to send: %v", test.resBody)
+					b := bytes.Buffer{}
+					gw := gzip.NewWriter(&b)
 					if _, err := gw.Write([]byte(test.resBody)); err != nil {
 						t.Fatal(err)
 					}
 					if err := gw.Close(); err != nil {
 						t.Fatal(err)
 					}
+					gb := b.Bytes()
+					t.Logf("body after gzip: %v", gb)
+					if _, err := w.Write(gb); err != nil {
+						t.Fatal(err)
+					}
+					test.resBody = string(gb)
 				} else {
 					_, _ = fmt.Fprintf(w, test.resBody)
 				}
@@ -140,7 +150,36 @@ func TestServeHTTP(t *testing.T) {
 			if _, exists := recorder.Result().Header["Content-Length"]; exists {
 				t.Error("The Content-Length Header must be deleted")
 			}
+			if test.contentEncoding == contentEncodingGzip {
+				t.Logf("received gzipped page: %v", recorder.Body.String())
+				var gr *gzip.Reader
+				gr, err = gzip.NewReader(bytes.NewReader(recorder.Body.Bytes()))
+				if err != nil {
+					t.Errorf("could not create a gzip reader: %v", err)
 
+					return
+				}
+
+				var b []byte
+				b, err = ioutil.ReadAll(gr)
+				if err != nil {
+					t.Errorf("unable to read unzipped response: %v", err)
+
+					return
+				}
+
+				if err = gr.Close(); err != nil {
+					t.Errorf("problem closing gzip test reader: %v", err)
+
+					return
+				}
+
+				if !bytes.Equal([]byte(test.expResBody), b) {
+					t.Errorf("got unzipped body %q, want %q", b, test.expResBody)
+				}
+
+				return
+			}
 			if !bytes.Equal([]byte(test.expResBody), recorder.Body.Bytes()) {
 				t.Errorf("got body %q, want %q", recorder.Body.Bytes(), test.expResBody)
 			}

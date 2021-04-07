@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net"
@@ -85,41 +84,16 @@ func (s *subfilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	rw := &responseWriter{
 		lastModified:   s.lastModified,
 		ResponseWriter: w,
+		buffer:         &bytes.Buffer{},
 	}
 
 	s.next.ServeHTTP(rw, r)
+
 	ce := rw.Header().Get("Content-Encoding")
+	b := rw.buffer.Bytes()
 
-	var b []byte
-
-	switch ce {
-	case "", "identity":
-		b = rw.buffer.Bytes()
-	case contentEncodingGzip:
-		gr, err := gzip.NewReader(&rw.buffer)
-		if err != nil {
-			log.Printf("unable to create gzip reader: %v", err)
-
-			return
-		}
-
-		b, err = ioutil.ReadAll(gr)
-		if err != nil {
-			log.Printf("unable to read gzipped response: %v", err)
-
-			return
-		}
-
-		err = gr.Close()
-		if err != nil {
-			log.Printf("unable to close gzip reader: %v", err)
-
-			return
-		}
-
-		rw.encoding = contentEncodingGzip
-	default:
-		if _, err := io.Copy(w, &rw.buffer); err != nil {
+	if ce != "" && ce != "identity" && ce != contentEncodingGzip {
+		if _, err := w.Write(b); err != nil {
 			log.Printf("unable to write response: %v", err)
 		}
 
@@ -129,36 +103,88 @@ func (s *subfilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for _, f := range s.filters {
 		b = f.regex.ReplaceAll(b, f.replacement)
 	}
+	// fmt.Printf("Regexed Page: %v\n", string(b))
+	if ce == "gzip" {
+		// fmt.Printf("Gzipping regexed page: %s\n", string(b))
+		var buf bytes.Buffer
+		gz := gzip.NewWriter(&buf)
 
+		_, err := gz.Write(b)
+		if err != nil {
+			log.Printf("unable to write gzipped modified response: %v", err)
+
+			return
+		}
+
+		if err = gz.Close(); err != nil {
+			log.Printf("unable to close gzip writer: %v", err)
+
+			return
+		}
+
+		b = buf.Bytes()
+	}
+
+	// log.Printf("regexed page Gzipped: %s\n", b)
 	if _, err := w.Write(b); err != nil {
 		log.Printf("unable to write modified response: %v", err)
 	}
 }
 
 type responseWriter struct {
-	buffer       bytes.Buffer
 	lastModified bool
 	wroteHeader  bool
-	encoding     string
+	buffer       *bytes.Buffer
+
 	http.ResponseWriter
 }
 
-func (r *responseWriter) WriteHeader(statusCode int) {
+func (r *responseWriter) WriteHeader(status int) {
 	if !r.lastModified {
-		r.ResponseWriter.Header().Del("Last-Modified")
+		r.Header().Del("Last-Modified")
 	}
 
 	r.wroteHeader = true
-	r.ResponseWriter.Header().Del("Content-Length")
-	r.ResponseWriter.WriteHeader(statusCode)
+	r.Header().Del("Content-Length")
+	r.ResponseWriter.WriteHeader(status)
 }
 
-func (r *responseWriter) Write(p []byte) (int, error) {
+func (r *responseWriter) Write(b []byte) (int, error) {
 	if !r.wroteHeader {
 		r.WriteHeader(http.StatusOK)
 	}
 
-	return r.buffer.Write(p)
+	if r.Header().Get("Content-Encoding") == "gzip" {
+		// fmt.Printf("Received GZIP encoded page: %s\n", b)
+		gr, err := gzip.NewReader(bytes.NewReader(b))
+		if err != nil {
+			return 0, fmt.Errorf("unable to create gzip reader: %w", err)
+		}
+
+		var cleanBytes []byte
+
+		cleanBytes, err = ioutil.ReadAll(gr)
+		if err != nil {
+			return 0, fmt.Errorf("unable to read gzipped response: %w", err)
+		}
+		// fmt.Printf("Decoded page: %s\n", cleanBytes)
+
+		var i int
+
+		i, err = r.buffer.Write(cleanBytes)
+		if err != nil {
+			return i, fmt.Errorf("could not write buffer: %w", err)
+		}
+
+		return i, nil
+	}
+
+	i, err := r.buffer.Write(b)
+	if err != nil {
+		return i, fmt.Errorf("could not write buffer: %w", err)
+	}
+
+	return i, nil
 }
 
 func (r *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
@@ -167,7 +193,12 @@ func (r *responseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 		return nil, nil, fmt.Errorf("%T is not a http.Hijacker", r.ResponseWriter)
 	}
 
-	return h.Hijack()
+	c, w, err := h.Hijack()
+	if err != nil {
+		return c, w, fmt.Errorf("hijack error: %w", err)
+	}
+
+	return c, w, nil
 }
 
 func (r *responseWriter) Flush() {
