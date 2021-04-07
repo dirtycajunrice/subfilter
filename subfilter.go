@@ -16,7 +16,7 @@ import (
 	"regexp"
 )
 
-const ContentEncodingGzip = "gzip"
+const contentEncodingGzip = "gzip"
 
 // Filter holds one Filter definition.
 type Filter struct {
@@ -95,7 +95,7 @@ func (s *subfilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch ce {
 	case "", "identity":
 		b = rw.buffer.Bytes()
-	case ContentEncodingGzip:
+	case contentEncodingGzip:
 		gr, err := gzip.NewReader(&rw.buffer)
 		if err != nil {
 			log.Printf("unable to create gzip reader: %v", err)
@@ -117,7 +117,7 @@ func (s *subfilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		rw.encoding = ContentEncodingGzip
+		rw.encoding = contentEncodingGzip
 	default:
 		if _, err := io.Copy(w, &rw.buffer); err != nil {
 			log.Printf("unable to write response: %v", err)
@@ -159,7 +159,7 @@ func (r *responseWriter) Write(p []byte) (int, error) {
 	}
 
 	switch r.encoding {
-	case ContentEncodingGzip:
+	case contentEncodingGzip:
 		gw := gzip.NewWriter(&r.buffer)
 
 		i, err := gw.Write(p)
