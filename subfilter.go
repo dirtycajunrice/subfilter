@@ -102,7 +102,7 @@ func (s *subfilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		rw.encoding = "gzip"
 	default:
-		if _, err := io.Copy(rw, &rw.buffer); err != nil {
+		if _, err := io.Copy(w, &rw.buffer); err != nil {
 			log.Printf("unable to write response: %v", err)
 		}
 		return
@@ -112,7 +112,7 @@ func (s *subfilter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		b = f.regex.ReplaceAll(b, f.replacement)
 	}
 
-	if _, err := rw.Write(b); err != nil {
+	if _, err := w.Write(b); err != nil {
 		log.Printf("unable to write modified response: %v", err)
 	}
 }

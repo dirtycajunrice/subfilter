@@ -47,14 +47,14 @@ func TestServeHTTP(t *testing.T) {
 			expResBody: "foo is the new foo",
 		},
 		{
-			desc: "should not replace anything if content encoding is not identity or empty",
+			desc: "should not replace anything if content encoding is not gzip, identity, or empty",
 			filters: []Filter{
 				{
 					Regex:       "foo",
 					Replacement: "bar",
 				},
 			},
-			contentEncoding: "gzip",
+			contentEncoding: "br",
 			resBody:         "foo is the new bar",
 			expResBody:      "foo is the new bar",
 		},
@@ -102,7 +102,7 @@ func TestServeHTTP(t *testing.T) {
 				_, _ = fmt.Fprintf(rw, test.resBody)
 			}
 
-			rewriteBody, err := New(context.Background(), http.HandlerFunc(next), config, "rewriteBody")
+			rewriteBody, err := New(context.Background(), http.HandlerFunc(next), config, "subfilter")
 			if err != nil {
 				t.Fatal(err)
 			}
