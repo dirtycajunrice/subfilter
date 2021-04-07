@@ -1,3 +1,3 @@
-module github.com/DirtyCajunRice/traefik-subfilter-plugin
+module github.com/DirtyCajunRice/subfilter
 
 go 1.16
